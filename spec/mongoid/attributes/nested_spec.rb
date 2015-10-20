@@ -4249,43 +4249,6 @@ describe Mongoid::Attributes::Nested do
           end
         end
       end
-
-      context "when the relationship is has many" do
-
-        context "when a nested attribute is set and allow_destroy is true, and cache counter and touch are true in the sub-document" do
-
-          let(:party) do
-            party = Party.create(name: 'Ruby Conference', guests_attributes: [{ name: 'attendee 1'}])
-            party.reload.guests
-            party.guests.to_a
-            party.update_attributes(name: 'Ruby Conference', guests_attributes: [{ id: party.guests.first, name: 'attendee 1', _destroy: '1'}])
-            party.reload.guests
-            party.guests.to_a
-            party
-          end
-
-          let(:party_timestamps) do
-            party = Party.create(name: 'Ruby Conference', guests_attributes: [{ name: 'attendee 1'}])
-            party.reload.guests
-            party.guests.to_a
-            time_one = party.updated_at
-            sleep 2
-            party.update_attributes(name: 'Ruby Conference', guests_attributes: [{ id: party.guests.first, name: 'attendee 1', _destroy: '1'}])
-            party.reload.guests
-            party.guests.to_a
-            time_two = party.updated_at
-            return time_one, time_two
-          end
-
-          it "updated_at timestamp is updated on destruction of sub-document" do
-            expect(party_timestamps[0]).to be < party_timestamps[1]
-          end
-
-          it "sub-document cache counter is decremented on destruction of sub-document" do
-            expect(party.guests_count).to eq(0)
-          end
-        end
-      end
     end
   end
 
@@ -4748,6 +4711,61 @@ describe Mongoid::Attributes::Nested do
     end
 
     context "when the relation is a has many" do
+
+      context "when the parent is timestamped" do
+
+        context "when the parent is touchable through the child" do
+
+          let(:party) do
+            Party.create(name: 'Ruby Conference',
+                         guests_attributes: [{ name: 'attendee 1'}])
+          end
+
+          let(:before_update) do
+            Time.new(1993, 07, 01)
+          end
+
+          context "when the child is destroyed via update_attributes" do
+
+            before do
+              party.reload
+              party.update_attributes(updated_at: before_update)    
+              party.update_attributes(guests_attributes: [{ id: party.guests.first,
+                                                            name: 'attendee 1',
+                                                            _destroy: '1'}])
+              party.reload
+            end
+
+            it "updates the timestamps of the parent" do
+              expect(party.updated_at).to be > before_update
+            end
+          end
+        end
+      end
+
+      context "when the parent has a counter cache set through the child" do
+
+        context "when the child is destroyed via update_attributes" do
+
+          let(:party) do
+            Party.create(name: 'Ruby Conference',
+                         guests_attributes: [{ name: 'attendee 1'}])
+          end
+
+          before do
+            party.reload
+            party.guests.to_a
+            party.update_attributes(guests_attributes: [{ id: party.guests.first,
+                                                          name: 'attendee 1',
+                                                          _destroy: '1'}])
+            party.reload
+          end
+
+          it "updates the parent's child counter" do
+            expect(party.guests_count).to eq(0)
+          end
+        end
+      end
 
       context "when updating with valid attributes" do
 
